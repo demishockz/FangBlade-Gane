@@ -27,7 +27,3 @@ The Ronin is a lone warrior, part of a secret faction tasked with guarding the E
 Can you survive the endless waves of enemies, uncover the Empire’s hidden agenda, and save Earth from annihilation? Only the strongest will make it to the end.
 
 Get ready for a thrilling ride in *FangBlade*, where the fate of Earth rests in your hands!
-
----
-
-This version adds more narrative depth, gameplay details, and atmosphere to make it sound more engaging. Let me know if you'd like to adjust anything!
