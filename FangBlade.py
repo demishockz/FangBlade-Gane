@@ -1,5 +1,5 @@
 import pygame
-
+import os
 pygame.init()
 
 SCREEN_WIDTH = 800
@@ -12,14 +12,19 @@ pygame.display.set_caption("FangBlade")
 clock = pygame.time.Clock()
 FPS = 60
 
+#define game variables
+GRAVITY = 0.75
+
 #define player action variables
 moving_left = False
 moving_right = False
 
 BG = (144, 201, 120)
+RED = (255, 0, 0)
 
 def draw_bg():
     screen.fill(BG)
+    pygame.draw.line(screen, RED, (0, 300), (SCREEN_WIDTH, 300))
 
 class Ninja(pygame.sprite.Sprite):
     def __init__(self, char_type, x, y, scale, speed):
@@ -28,23 +33,28 @@ class Ninja(pygame.sprite.Sprite):
         self.char_type = char_type
         self.speed = speed
         self.direction = 1
+        self.vel_y = 0
+        self.jump = False
+        self.in_air = True
         self.flip = False
         self.animation_list = []
         self.frame_index = 0
         self.action = 0
         self.update_time = pygame.time.get_ticks()
-        temp_list = []
-        for i in range(18):
-            img = pygame.image.load(f'/Users/abhinava/VisualStudioCode/fangblade_assets/Idle/{i}.png').convert_alpha()
-            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
-        temp_list = []
-        for i in range(6):
-            img = pygame.image.load(f'/Users/abhinava/VisualStudioCode/fangblade_assets/Run/{i}.png').convert_alpha()
-            img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
-            temp_list.append(img)
-        self.animation_list.append(temp_list)
+        
+        #load all of the images for the player
+        animation_types = ['Idle', 'Run', 'Jump']
+        for animation in animation_types:
+            #reset temporary list of image
+            temp_list = []
+            #count number of images in the folder
+            num_of_frames = len(os.listdir(f'/Users/abhinava/VisualStudioCode/fangblade_assets/{animation}'))
+            for i in range(num_of_frames - 1):
+                img = pygame.image.load(f'/Users/abhinava/VisualStudioCode/fangblade_assets/{animation}/{i}.png').convert_alpha()
+                img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+                temp_list.append(img)
+            self.animation_list.append(temp_list)
+            
         self.img = self.animation_list[self.action][self.frame_index]
         self.rect = self.img.get_rect()
         self.rect.center = (x,y)
@@ -64,6 +74,23 @@ class Ninja(pygame.sprite.Sprite):
             self.flip = False
             self.direction = 1
 
+        #jump
+        if self.jump == True and self.in_air == False:
+            self.vel_y = -11
+            self.jump = False
+            self.in_air = True
+
+        #apply gravity
+        self.vel_y += GRAVITY
+        if self.vel_y > 10:
+            self.vel_y
+        dy += self.vel_y
+
+        #check collision with floor
+        if self.rect.bottom + dy > 300:
+            dy = 300 - self.rect.bottom
+            self.in_air = False
+            
             #update rectangle position
         self.rect.x += dx
         self.rect.y += dy
@@ -113,11 +140,13 @@ while run:
 
     #update player actions
     if player.alive:
-        if moving_left or moving_right:
+        if player.in_air:
+            player.update_action(2)#2: jump
+        elif moving_left or moving_right:
             player.update_action(1)#1: run
         else:
             player.update_action(0)#0: idle
-    
+
     for event in pygame.event.get():
         #quit game
         if event.type == pygame.QUIT:
@@ -128,6 +157,10 @@ while run:
                 moving_left = True
             if event.key == pygame.K_d:
                 moving_right = True
+            if event.key == pygame.K_w:
+                player.jump = True
+            if event.key == pygame.K_ESCAPE:
+                run = False
 
         #keyboard button released
         if event.type == pygame.KEYUP:
@@ -135,8 +168,7 @@ while run:
                 moving_left = False
             if event.key == pygame.K_d:
                 moving_right = False
-            if event.key == pygame.K_ESCAPE:
-                run = False
+            
 
 
     pygame.display.update()
