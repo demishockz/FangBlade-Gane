@@ -1,6 +1,7 @@
 import pygame
 import os
 import random
+import csv
 pygame.init()
 
 SCREEN_WIDTH = 800
@@ -15,7 +16,11 @@ FPS = 60
 
 #define game variables
 GRAVITY = 0.75
-TILE_SIZE = 40
+ROWS = 16
+COLS = 150
+TILE_SIZE = SCREEN_HEIGHT // ROWS
+TILE_TYPES = 8
+level = 1
 
 #define player action variables
 moving_left = False
@@ -29,6 +34,7 @@ damage_boost = 0
 #load images
 #shuriken
 shuriken_img = pygame.image.load('/Users/abhinava/VisualStudioCode/fangblade_assets/Shuriken/shuriken.png').convert_alpha()
+bat_img = pygame.image.load('/Users/abhinava/VisualStudioCode/fangblade_assets/Bat/bat.png').convert_alpha()
 lightslashsprite_img = pygame.image.load('/Users/abhinava/VisualStudioCode/fangblade_assets/SlashSprite/lightslash.png').convert_alpha()
 heavyslashsprite_img = pygame.image.load('/Users/abhinava/VisualStudioCode/fangblade_assets/SlashSprite/heavyslash.png').convert_alpha()
 #load item boxes
@@ -160,37 +166,6 @@ class Ronin(pygame.sprite.Sprite):
             #reduce ammo
             self.ammo -= 1
 
-    def ai(self):
-        if self.alive and player.alive:
-            if self.idling == False and random.randint(1, 200) == 1:
-                self.update_action(0)  # 0: idle
-                self.idling = True
-                self.idling_counter = 50
-            #check if player is in vision
-            if self.vision.colliderect(player.rect):
-                #stop running and face the player
-                self.shoot()
-            else:
-                if self.idling == False:
-                    if self.direction == 1:
-                        ai_moving_right = True
-                    else:
-                        ai_moving_right = False
-                    ai_moving_left = not ai_moving_right
-                    self.move(ai_moving_left, ai_moving_right)
-                    self.update_action(1)  # 1: run
-                    self.move_counter += 1
-                    #update ai vision as the enemy moves
-                    self.vision.center = (self.rect.centerx + 75 * self.direction, self.rect.centery)
-
-                    if self.move_counter > TILE_SIZE:
-                        self.direction *= -1
-                        self.move_counter *= -1
-                else:
-                    self.idling_counter -= 1
-                    if self.idling_counter <= 0:
-                        self.idling = False
-
     def lightslash(self):
         if self.lightslash_cooldown == 0:
             self.update_action(4)
@@ -316,6 +291,189 @@ class Shuriken(pygame.sprite.Sprite):
                     print(enemy.health)
                     self.kill()
 
+class Vampire(pygame.sprite.Sprite):
+    def __init__(self, char_type, x, y, scale, speed, ammo):
+        pygame.sprite.Sprite.__init__(self)
+        self.alive = True
+        self.char_type = char_type
+        self.speed = speed
+        self.ammo = ammo
+        self.start_ammo = ammo
+        self.shoot_cooldown = 0
+        self.health = 100
+        self.max_health = self.health
+        self.direction = 1
+        self.vel_y = 0
+        self.jump = False
+        self.in_air = True
+        self.flip = False
+        self.animation_list = []
+        self.frame_index = 0
+        self.action = 0
+        self.update_time = pygame.time.get_ticks()
+        #ai specific variables
+        self.move_counter = 0
+        self.vision = pygame.Rect(0, 0, 150, 20)
+        self.idling = False
+        self.idling_counter = 0
+        
+        #load all of the images for the player
+        animation_types = ['Idle', 'Run', 'Death', 'Attack']
+        for animation in animation_types:
+            #reset temporary list of image
+            temp_list = []
+            #count number of images in the folder
+            num_of_frames = len(os.listdir(f'/Users/abhinava/VisualStudioCode/fangblade_assets/Enemy/{animation}'))
+            for i in range(num_of_frames - 1):
+                img = pygame.image.load(f'/Users/abhinava/VisualStudioCode/fangblade_assets/Enemy/{animation}/{i}.png').convert_alpha()
+                img = pygame.transform.scale(img, (int(img.get_width() * scale), int(img.get_height() * scale)))
+                temp_list.append(img)
+            self.animation_list.append(temp_list)
+            
+        self.img = self.animation_list[self.action][self.frame_index]
+        self.rect = self.img.get_rect()
+        self.rect.center = (x,y)
+
+    def update(self):
+        self.update_animation()
+        self.check_alive()
+        #update cooldown
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
+    
+    def move(self, moving_left, moving_right):
+        #reset movement variables
+        dx = 0
+        dy = 0
+
+        #assign movement variables if moving left or right
+        if moving_left:
+            dx = -self.speed
+            self.flip = True
+            self.direction = -1
+        if moving_right:
+            dx = self.speed
+            self.flip = False
+            self.direction = 1
+
+        #apply gravity
+        self.vel_y += GRAVITY
+        if self.vel_y > 10:
+            self.vel_y
+        dy += self.vel_y
+
+        #check collision with floor
+        if self.rect.bottom + dy > 300:
+            dy = 300 - self.rect.bottom
+            self.in_air = False
+
+            #update rectangle position
+        self.rect.x += dx
+        self.rect.y += dy
+
+    def shoot(self):
+        if self.shoot_cooldown == 0 and self.ammo > 0:
+            self.shoot_cooldown = 30
+            bat = Bat(self.rect.centerx + (0.6 * self.rect.size[0] * self.direction), self.rect.centery, self.direction, 250)
+            bat_group.add(bat)
+            #reduce ammo
+            self.ammo -= 1
+
+    def ai(self):
+        if self.alive and player.alive:
+            if self.idling == False and random.randint(1, 200) == 1:
+                self.update_action(0)  # 0: idle
+                self.idling = True
+                self.idling_counter = 50
+            #check if player is in vision
+            if self.vision.colliderect(player.rect):
+                #stop running and face the player
+                self.update_action(3) 
+                self.shoot()
+            else:
+                if self.idling == False:
+                    if self.direction == 1:
+                        ai_moving_right = True
+                    else:
+                        ai_moving_right = False
+                    ai_moving_left = not ai_moving_right
+                    self.move(ai_moving_left, ai_moving_right)
+                    self.update_action(1)  # 1: run
+                    self.move_counter += 1
+                    #update ai vision as the enemy moves
+                    self.vision.center = (self.rect.centerx + 75 * self.direction, self.rect.centery)
+
+                    if self.move_counter > TILE_SIZE:
+                        self.direction *= -1
+                        self.move_counter *= -1
+                else:
+                    self.idling_counter -= 1
+                    if self.idling_counter <= 0:
+                        self.idling = False
+               
+    def update_animation(self):
+        #update the animation
+        ANIMATION_COOLDOWN = 100
+        #update image depending on current frame
+        self.img = self.animation_list[self.action][self.frame_index]
+        #check if enough time has passed since the last update
+        if pygame.time.get_ticks() - self.update_time > ANIMATION_COOLDOWN: 
+            self.update_time = pygame.time.get_ticks()
+            self.frame_index += 1
+        #if the animation has reached the end, reset to 0
+        if self.frame_index >= len(self.animation_list[self.action]):
+            if self.action == 2:
+                self.frame_index = len(self.animation_list[self.action]) - 1
+            else:
+                self.frame_index = 0
+
+
+    def update_action(self, new_action):
+        #check if the new action is different from the previous one
+        if new_action != self.action:
+            self.action = new_action
+            #update the frame index to 0
+            self.frame_index = 0
+            #update the time
+            self.update_time = pygame.time.get_ticks()
+
+    def check_alive(self):
+        if self.health <= 0:
+            self.health = 0
+            self.speed = 0
+            self.alive = False
+            self.update_action(2)
+
+    def draw(self):
+        screen.blit(pygame.transform.flip(self.img, self.flip, False,), self.rect)
+
+
+class Bat(pygame.sprite.Sprite):
+    def __init__(self, x, y, direction, scale):
+        pygame.sprite.Sprite.__init__(self)
+        self.speed = 10
+        self.scale = scale
+        self.image = bat_img
+        if direction == -1:
+            self.image = pygame.transform.flip(self.image, True, False)
+        self.rect = self.image.get_rect()
+        self.rect.center = (x, y)
+        self.direction = direction
+        self.flip = False
+
+    def update(self):
+        #move bat
+        self.rect.x += (self.speed * self.direction)
+        #check if bat is off screen
+        if self.rect.left < 0 or self.rect.right > SCREEN_WIDTH:
+            self.kill()
+
+        #check for collision with characters
+        if pygame.sprite.spritecollide(player, bat_group, False):
+            if player.alive:
+                player.health -= 5
+                self.kill()
+
 class LightSlashSprite(pygame.sprite.Sprite):
     def __init__(self, x, y, direction, scale):
         pygame.sprite.Sprite.__init__(self)
@@ -420,6 +578,7 @@ class ShopMenu:
 #create sprite groups
 enemy_group = pygame.sprite.Group()
 shuriken_group = pygame.sprite.Group()
+bat_group = pygame.sprite.Group()
 lightslashsprite_group = pygame.sprite.Group()
 heavyslashsprite_group = pygame.sprite.Group()
 item_box_group = pygame.sprite.Group()
@@ -439,8 +598,8 @@ player = Ronin('player', 200, 200, 3.5, 5, 20)
 health_bar = HealthBar(10, 10, player.health, player.max_health)
 
 
-enemy = Ronin('enemy', 400, 200, 3.5, 2, 20)
-enemy2 = Ronin('enemy', 300, 300, 3.5, 2, 20)
+enemy = Vampire('enemy', 400, 200, 3.5, 2, 20)
+enemy2 = Vampire('enemy', 300, 300, 3.5, 2, 20)
 enemy_group.add(enemy)
 enemy_group.add(enemy2)
 
@@ -500,6 +659,8 @@ while run:
         #update and draw groups
         shuriken_group.update()
         shuriken_group.draw(screen)
+        bat_group.update()
+        bat_group.draw(screen)
         lightslashsprite_group.update()
         lightslashsprite_group.draw(screen)
         heavyslashsprite_group.update()
